@@ -1,4 +1,4 @@
-package br.com.estapar.parkingxmanagement;
+package br.com.estapar.parkingmanagement;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;

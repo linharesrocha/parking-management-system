@@ -1,4 +1,4 @@
-package br.com.estapar.parkingxmanagement.domain.model;
+package br.com.estapar.parkingmanagement.domain.model;
 
 import jakarta.persistence.*;
 import lombok.Data;
