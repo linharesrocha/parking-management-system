@@ -6,6 +6,8 @@ import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
@@ -32,4 +34,7 @@ public class Sector {
 
     @Column(nullable = false)
     private LocalTime closeHour;
+
+    @OneToMany(mappedBy = "sector", cascade = CascadeType.ALL,  fetch = FetchType.LAZY)
+    private List<Spot> spots = new ArrayList<>();
 }
