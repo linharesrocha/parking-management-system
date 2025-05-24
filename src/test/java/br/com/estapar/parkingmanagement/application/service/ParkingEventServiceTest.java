@@ -1,5 +1,6 @@
 package br.com.estapar.parkingmanagement.application.service;
 
+import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.EventType;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
 import br.com.estapar.parkingmanagement.domain.model.*;
@@ -214,4 +215,54 @@ public class ParkingEventServiceTest {
 
         verify(spotRepository, never()).save(any());
     }
+
+    @Test
+    void getPlaceStatus_quandoRegistroAtivoExiste_deveRetornarStatusDTOCorreto() {
+        // Arrange
+        String licensePlate = "PARKED-01";
+        LocalDateTime entryTime = LocalDateTime.now().minusHours(1).minusMinutes(30);
+
+        Vehicle vehicle = new Vehicle(licensePlate);
+        Spot spot = new Spot();
+        spot.setLat(-10.0);
+        spot.setLng(-20.0);
+
+        ParkingRecord activeRecord = new ParkingRecord();
+        activeRecord.setVehicle(vehicle);
+        activeRecord.setSpot(spot);
+        activeRecord.setEntryTime(entryTime);
+        activeRecord.setPricePerHour(new BigDecimal("20.00"));
+
+        when(parkingRecordRepository.findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE))
+                .thenReturn(Optional.of(activeRecord));
+
+        // Act
+        Optional<PlateStatusResponseDTO> resultOpt = parkingEventService.getPlateStatus(licensePlate);
+
+        // Assert
+        assertTrue(resultOpt.isPresent(), "O Optional retornado não deveria estar vazio.");
+
+        PlateStatusResponseDTO resultDTO = resultOpt.get();
+        assertEquals(licensePlate, resultDTO.getLicensePlate());
+        assertEquals(-10.0, resultDTO.getLat());
+        assertNotNull(resultDTO.getTimeParked(), "A duração do estacionamento não deveria ser nula.");
+        assertEquals(0, new BigDecimal("30.00").compareTo(resultDTO.getPriceUntilNow()));
+    }
+
+    @Test
+    void getPlateStatus_quandoNaoExisteRegistroAtivo_deveRetornarOptionalVazio() {
+        // Arrange
+        String licensePlate = "NOT-PARKED-02";
+
+        when(parkingRecordRepository.findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+
+        // Act
+        Optional<PlateStatusResponseDTO> resultOpt = parkingEventService.getPlateStatus(licensePlate);
+
+        // Assert
+        assertTrue(resultOpt.isEmpty(), "O Optional retornado deveria estar vazio.");
+    }
+
+
 }

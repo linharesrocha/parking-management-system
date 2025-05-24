@@ -148,9 +148,48 @@ public class ParkingEventService {
     public Optional<PlateStatusResponseDTO> getPlateStatus(String licensePlate) {
         log.debug("Buscando status para a placa: {}", licensePlate);
 
-        // TODO: Implementar a lógica para buscar o ParkingRecord ativo.
+        // Busca o registro de estacionamento ATIVO para a placa fornecida
+        Optional<ParkingRecord> activeRecordOpt = parkingRecordRepository
+                .findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE);
 
-        return Optional.empty();
+        // Validação
+        if(activeRecordOpt.isEmpty()) {
+            log.info("Nenhum registro de estacionamento ativo encontrado para a placa: {}", licensePlate);
+            return Optional.empty();
+        }
+
+        // Extrair dados
+        ParkingRecord activeRecord = activeRecordOpt.get();
+        Spot spot = activeRecord.getSpot();
+        Vehicle vehicle = activeRecord.getVehicle();
+
+        LocalDateTime entryTime = activeRecord.getEntryTime();
+        LocalDateTime currentTime = LocalDateTime.now();
+        Duration duration = Duration.between(entryTime, currentTime);
+
+        // Calcula o preço até o momento
+        BigDecimal pricePerHour = activeRecord.getPricePerHour();
+
+        // Converte a duração para horas decimais (ex: 1.5 para 1 hora e 30 min).
+        // Usa 2 casas de precisão para a divisão para evitar dízimas no cálculo de horas.
+        BigDecimal durationInHours = new BigDecimal(duration.toMinutes())
+                .divide(new BigDecimal("60"), 2, RoundingMode.HALF_UP);
+
+        BigDecimal priceUntilNow = durationInHours.multiply(pricePerHour)
+                .setScale(2, RoundingMode.HALF_UP);
+
+        // Monta DTO da Resposta
+        PlateStatusResponseDTO responseDTO = new PlateStatusResponseDTO(
+                vehicle.getLicensePlate(),
+                priceUntilNow,
+                entryTime.format(DateTimeFormatter.ISO_DATE_TIME),
+                duration.toString(),
+                spot.getLat(),
+                spot.getLng()
+        );
+
+        log.info("Status encontrado para a placa {}: {}", licensePlate, responseDTO);
+        return Optional.of(responseDTO);
     }
 
     private BigDecimal calculateDynamicPrice(Sector sector) {
