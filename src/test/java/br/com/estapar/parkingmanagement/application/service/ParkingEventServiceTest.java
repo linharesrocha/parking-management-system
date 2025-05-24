@@ -5,6 +5,7 @@ import br.com.estapar.parkingmanagement.application.dto.query.RevenueResponseDTO
 import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.EventType;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
+import br.com.estapar.parkingmanagement.domain.exception.ResourceNotFoundException;
 import br.com.estapar.parkingmanagement.domain.model.*;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.ParkingRecordRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.SectorRepository;
@@ -253,15 +254,16 @@ public class ParkingEventServiceTest {
                 .thenReturn(Optional.empty());
 
         // Act & Assert
-        assertThrows(IllegalStateException.class, () -> {
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
             parkingEventService.processEvent(exitEvent);
         });
 
-        verify(spotRepository, never()).save(any());
+        // Opcional, mas bom: verificar a mensagem da exceção
+        assertTrue(exception.getMessage().contains(plate), "A mensagem da exceção deveria conter a placa.");
     }
 
     @Test
-    void getPlaceStatus_quandoRegistroAtivoExiste_deveRetornarStatusDTOCorreto() {
+    void getPlateStatus_quandoRegistroAtivoExiste_deveRetornarStatusDTOCorreto() {
         // Arrange
         String licensePlate = "PARKED-01";
         LocalDateTime entryTime = LocalDateTime.now().minusHours(1).minusMinutes(30);
@@ -281,12 +283,10 @@ public class ParkingEventServiceTest {
                 .thenReturn(Optional.of(activeRecord));
 
         // Act
-        Optional<PlateStatusResponseDTO> resultOpt = parkingEventService.getPlateStatus(licensePlate);
+        PlateStatusResponseDTO resultDTO = parkingEventService.getPlateStatus(licensePlate);
 
         // Assert
-        assertTrue(resultOpt.isPresent(), "O Optional retornado não deveria estar vazio.");
-
-        PlateStatusResponseDTO resultDTO = resultOpt.get();
+        assertNotNull(resultDTO, "O DTO retornado não deveria ser nulo.");
         assertEquals(licensePlate, resultDTO.getLicensePlate());
         assertEquals(-10.0, resultDTO.getLat());
         assertNotNull(resultDTO.getTimeParked(), "A duração do estacionamento não deveria ser nula.");
@@ -294,33 +294,33 @@ public class ParkingEventServiceTest {
     }
 
     @Test
-    void getPlateStatus_quandoNaoExisteRegistroAtivo_deveRetornarOptionalVazio() {
+    void getPlateStatus_quandoNaoExisteRegistroAtivo_deveLancarResourceNotFoundException() {
         // Arrange
         String licensePlate = "NOT-PARKED-02";
 
         when(parkingRecordRepository.findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE))
                 .thenReturn(Optional.empty());
 
-        // Act
-        Optional<PlateStatusResponseDTO> resultOpt = parkingEventService.getPlateStatus(licensePlate);
-
-        // Assert
-        assertTrue(resultOpt.isEmpty(), "O Optional retornado deveria estar vazio.");
+        // Act & Assert
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            parkingEventService.getPlateStatus(licensePlate);
+        });
+        assertTrue(exception.getMessage().contains(licensePlate));
     }
 
     @Test
-    void getSpotStatus_quandoVagaNaoEncontrada_deveRetornarOptionalVazio() {
+    void getSpotStatus_quandoVagaNaoEncontrada_deveLancarResourceNotFoundException() {
         // Arrange
         Double lat = -10.0;
         Double lng = -20.0;
 
         when(spotRepository.findByLatAndLng(lat, lng)).thenReturn(Optional.empty());
 
-        // Act
-        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
-
-        // Assert
-        assertTrue(resultOpt.isEmpty(), "Deveria retornar um Optional vazio se a vaga não existe.");
+        // Act & Assert
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            parkingEventService.getSpotStatus(lat, lng);
+        });
+        assertTrue(exception.getMessage().contains("Nenhuma vaga encontrada para as coordenadas"));
     }
 
     @Test
@@ -337,16 +337,15 @@ public class ParkingEventServiceTest {
         when(spotRepository.findByLatAndLng(lat, lng)).thenReturn(Optional.of(vagaLivre));
 
         // Act
-        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
+        SpotStatusResponseDTO resultDTO = parkingEventService.getSpotStatus(lat, lng);
 
         // Assert
-        assertTrue(resultOpt.isPresent());
-        SpotStatusResponseDTO dto = resultOpt.get();
-        assertFalse(dto.isOccupied(), "O DTO deveria indicar que a vaga não está ocupada.");
-        assertNull(dto.getLicensePlate(), "Placa deveria ser nula para vaga livre.");
-        assertEquals(0, BigDecimal.ZERO.compareTo(dto.getPriceUntilNow()), "Preço deveria ser zero para vaga livre.");
-        assertNull(dto.getEntryTime(), "Tempo de entrada deveria ser nulo para vaga livre.");
-        assertNull(dto.getTimeParked(), "Tempo estacionado deveria ser nulo para vaga livre.");
+        assertNotNull(resultDTO);
+        assertFalse(resultDTO.isOccupied());
+        assertNull(resultDTO.getLicensePlate());
+        assertEquals(0, BigDecimal.ZERO.compareTo(resultDTO.getPriceUntilNow()));
+        assertNull(resultDTO.getEntryTime());
+        assertNull(resultDTO.getTimeParked());
     }
 
     @Test
@@ -377,16 +376,15 @@ public class ParkingEventServiceTest {
                 .thenReturn(Optional.of(registroAtivo));
 
         // Act
-        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
+        SpotStatusResponseDTO resultDTO = parkingEventService.getSpotStatus(lat, lng);
 
         // Assert
-        assertTrue(resultOpt.isPresent());
-        SpotStatusResponseDTO dto = resultOpt.get();
-        assertTrue(dto.isOccupied());
-        assertEquals("XYZ-1234", dto.getLicensePlate());
-        assertEquals(0, new BigDecimal("20.00").compareTo(dto.getPriceUntilNow()));
-        assertEquals(entryTime.format(DateTimeFormatter.ISO_DATE_TIME), dto.getEntryTime());
-        assertNotNull(dto.getTimeParked());
+        assertNotNull(resultDTO);
+        assertTrue(resultDTO.isOccupied());
+        assertEquals("XYZ-1234", resultDTO.getLicensePlate());
+        assertEquals(0, new BigDecimal("20.00").compareTo(resultDTO.getPriceUntilNow()));
+        assertEquals(entryTime.format(DateTimeFormatter.ISO_DATE_TIME), resultDTO.getEntryTime());
+        assertNotNull(resultDTO.getTimeParked());
     }
 
     @Test
@@ -406,34 +404,30 @@ public class ParkingEventServiceTest {
                 .thenReturn(Optional.empty());
 
         // Act
-        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
+        SpotStatusResponseDTO responseDTO = parkingEventService.getSpotStatus(lat, lng);
 
         // Assert
-        assertTrue(resultOpt.isPresent());
-        SpotStatusResponseDTO dto = resultOpt.get();
-        assertTrue(dto.isOccupied(), "A vaga ainda deve ser reportada como ocupada.");
-        assertEquals("ERRO_INTERNO_VAGA_SEM_REGISTRO_ATIVO", dto.getLicensePlate(), "Deveria indicar um erro na placa.");
-        assertNull(dto.getPriceUntilNow(), "Preço deveria ser nulo ou não presente no DTO em caso de erro interno.");
-        assertNull(dto.getEntryTime());
-        assertNull(dto.getTimeParked());
+        assertNotNull(responseDTO);
+        assertTrue(responseDTO.isOccupied());
+        assertEquals("ERRO_INTERNO_VAGA_SEM_REGISTRO_ATIVO", responseDTO.getLicensePlate());
+        assertNull(responseDTO.getPriceUntilNow());
+        assertNull(responseDTO.getEntryTime());
+        assertNull(responseDTO.getTimeParked());
     }
 
     @Test
-    void getRevenueForSectorAndDate_quandoSetorNaoEncontrado_deveRetornarFaturamentoZero() {
+    void getRevenueForSectorAndDate_quandoSetorNaoEncontrado_deveLancarResourceNotFoundException() {
         // Arrange
         String nomeSetorInexistente = "SETOR_QUE_NAO_EXISTE";
         LocalDate dataConsulta = LocalDate.of(2025, 1, 1);
 
         when(sectorRepository.findByName(nomeSetorInexistente)).thenReturn(Optional.empty());
 
-        // Act
-        RevenueResponseDTO resultado = parkingEventService.getRevenueForSectorAndDate(nomeSetorInexistente, dataConsulta);
-
-        // Assert
-        assertNotNull(resultado);
-        assertEquals(0, BigDecimal.ZERO.compareTo(resultado.getAmount()), "O faturamento deveria ser zero para setor inexistente.");
-        assertEquals("BRL", resultado.getCurrency());
-        assertNotNull(resultado.getTimestamp());
+        // Act & Assert
+        ResourceNotFoundException exception = assertThrows(ResourceNotFoundException.class, () -> {
+            parkingEventService.getRevenueForSectorAndDate(nomeSetorInexistente, dataConsulta);
+        });
+        assertTrue(exception.getMessage().contains(nomeSetorInexistente));
 
         verify(parkingRecordRepository, never()).sumFinalFareBySectorAndDateRange(any(), any(), any(), any());
     }
@@ -459,7 +453,7 @@ public class ParkingEventServiceTest {
 
         // Assert
         assertNotNull(resultado);
-        assertEquals(0, BigDecimal.ZERO.compareTo(resultado.getAmount()), "O faturamento deveria ser zero se não há registros.");
+        assertEquals(0, BigDecimal.ZERO.compareTo(resultado.getAmount()));
         assertEquals("BRL", resultado.getCurrency());
         assertNotNull(resultado.getTimestamp());
     }
@@ -486,7 +480,7 @@ public class ParkingEventServiceTest {
 
         // Assert
         assertNotNull(resultado);
-        assertEquals(0, faturamentoEsperado.compareTo(resultado.getAmount()), "O faturamento calculado está incorreto.");
+        assertEquals(0, faturamentoEsperado.compareTo(resultado.getAmount()));
         assertEquals("BRL", resultado.getCurrency());
         assertNotNull(resultado.getTimestamp());
     }
