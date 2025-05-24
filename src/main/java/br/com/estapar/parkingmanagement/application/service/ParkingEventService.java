@@ -1,6 +1,7 @@
 package br.com.estapar.parkingmanagement.application.service;
 
 import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
+import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
 import br.com.estapar.parkingmanagement.domain.model.*;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.ParkingRecordRepository;
@@ -190,6 +191,15 @@ public class ParkingEventService {
 
         log.info("Status encontrado para a placa {}: {}", licensePlate, responseDTO);
         return Optional.of(responseDTO);
+    }
+
+    public Optional<SpotStatusResponseDTO> getSpotStatus(Double lat, Double lng) {
+        log.debug("Buscando status para a vaga em lat: {}, lng: {}", lat, lng);
+
+        // TODO: Implementar a lógica
+
+        return Optional.empty() ;
+
     }
 
     private BigDecimal calculateDynamicPrice(Sector sector) {

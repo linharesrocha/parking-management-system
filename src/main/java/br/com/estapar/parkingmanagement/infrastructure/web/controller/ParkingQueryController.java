@@ -2,6 +2,8 @@ package br.com.estapar.parkingmanagement.infrastructure.web.controller;
 
 import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusRequestDTO;
 import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
+import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusRequestDTO;
+import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.service.ParkingEventService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -34,4 +36,16 @@ public class ParkingQueryController {
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
+
+    @PostMapping("/spot-status")
+    public ResponseEntity<SpotStatusResponseDTO> getSpotStatus(@Valid @RequestBody SpotStatusRequestDTO requestDTO) {
+        log.info("Recebida requisição para /spot-status: lat={}, lng={]", requestDTO.getLat(), requestDTO.getLng());
+
+        Optional<SpotStatusResponseDTO> responseOpt = parkingEventService.getSpotStatus(requestDTO.getLat(), requestDTO.getLng());
+
+        return responseOpt
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
 }
