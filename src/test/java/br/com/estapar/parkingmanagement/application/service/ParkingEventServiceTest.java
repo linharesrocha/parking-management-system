@@ -14,6 +14,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -141,5 +143,75 @@ public class ParkingEventServiceTest {
         });
 
         verify(parkingRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void processEvent_comEventoDeSaida_deveFinalizarRegistroECalcularTarifa() {
+        // Arrange
+        String plate = "ABC-1234";
+        WebhookEventDTO exitEvent = new WebhookEventDTO();
+        exitEvent.setEventType(EventType.EXIT);
+        exitEvent.setLicensePlate(plate);
+
+        LocalDateTime entryTime = LocalDateTime.parse("2025-01-01T10:00:00");
+        LocalDateTime exitTime = LocalDateTime.parse("2025-01-01T12:00:00"); // 2 horas depois
+        exitEvent.setExitTime(exitTime.format(DateTimeFormatter.ISO_DATE_TIME));
+
+        Vehicle vehicle = new Vehicle(plate);
+        Sector sector = new Sector();
+        Spot spot = new Spot();
+        spot.setId(1L);
+        spot.setSector(sector);
+        spot.setOccupied(true);
+
+        ParkingRecord activeRecord = new ParkingRecord();
+        activeRecord.setId(100L);
+        activeRecord.setVehicle(vehicle);
+        activeRecord.setSpot(spot);
+        activeRecord.setEntryTime(entryTime);
+        activeRecord.setStatus(ParkingStatus.ACTIVE);
+        activeRecord.setPricePerHour(new BigDecimal("15.00"));
+
+        when(parkingRecordRepository.findByVehicleLicensePlateAndStatus(plate, ParkingStatus.ACTIVE))
+                .thenReturn(Optional.of(activeRecord));
+
+        // Act
+        parkingEventService.processEvent(exitEvent);
+
+        // Assert
+        ArgumentCaptor<ParkingRecord> recordCaptor = ArgumentCaptor.forClass(ParkingRecord.class);
+        ArgumentCaptor<Spot> spotCaptor = ArgumentCaptor.forClass(Spot.class);
+
+        verify(parkingRecordRepository, times(1)).save(recordCaptor.capture());
+        verify(spotRepository, times(1)).save(spotCaptor.capture());
+
+        ParkingRecord savedRecord = recordCaptor.getValue();
+        assertEquals(ParkingStatus.COMPLETED, savedRecord.getStatus());
+        assertEquals(exitTime, savedRecord.getExitTime());
+        // Tarifa esperada: 2 horas * R$15.00 a hora = R$30.00
+        assertEquals(0, new BigDecimal("30.00").compareTo(savedRecord.getFinalFare()));
+
+        Spot freedSpot = spotCaptor.getValue();
+        assertFalse(freedSpot.isOccupied());
+    }
+
+    @Test
+    void processEvent_comEventoDeSaidaSemRegistroAtivo_deveLancarExcecao() {
+        // Arrange
+        String plate = "XYZ-7890";
+        WebhookEventDTO exitEvent = new WebhookEventDTO();
+        exitEvent.setEventType(EventType.EXIT);
+        exitEvent.setLicensePlate(plate);
+        exitEvent.setExitTime(LocalDateTime.now().format(DateTimeFormatter.ISO_DATE_TIME));
+
+        when(parkingRecordRepository.findByVehicleLicensePlateAndStatus(plate, ParkingStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+
+        // Act & Assert
+        assertThrows(IllegalStateException.class, () -> {
+            parkingEventService.processEvent(exitEvent);
+        });
+
+        verify(spotRepository, never()).save(any());
     }
 }

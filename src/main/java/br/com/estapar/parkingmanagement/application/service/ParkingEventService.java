@@ -12,7 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 
 @Service
 public class ParkingEventService {
@@ -96,8 +98,49 @@ public class ParkingEventService {
     }
 
     private void handleExitEvent(WebhookEventDTO eventDTO) {
-        log.debug("Lógica para tratar SAÍDA para a placa: {}", eventDTO.getLicensePlate());
-        // TODO: Implementar a lógica de saída.
+        log.debug("Tratando SAÍDA para a placa: {}", eventDTO.getLicensePlate());
+        String licensePlate = eventDTO.getLicensePlate();
+
+        // Encontrar o ParkingRecord ativo para este veículo
+        ParkingRecord activeRecord = parkingRecordRepository
+                .findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE)
+                .orElseThrow(() -> {
+                   log.error("Nenhum registro de estacionamento ativo encontrado para a placa: {}", licensePlate);
+                   return new IllegalStateException("Nenhum registro de estacionamento ativo encontrado para a placa: " + licensePlate);
+                });
+
+        // Definir hora da saída
+        LocalDateTime exitTime = LocalDateTime.parse(eventDTO.getExitTime(), DateTimeFormatter.ISO_DATE_TIME);
+        activeRecord.setExitTime(exitTime);
+
+        // Calcular o valor final
+        LocalDateTime entryTime = activeRecord.getEntryTime();
+        BigDecimal pricePerHour = activeRecord.getPricePerHour();
+
+        // Calcula a duração em minutos
+        long durationInMinutes = Duration.between(entryTime, exitTime).toMinutes();
+
+        if(durationInMinutes <= 0) {
+            durationInMinutes = 0;
+        }
+
+        // Converte minutos para horas e calcula o valor
+        BigDecimal durationInHours = new BigDecimal(durationInMinutes).divide(new BigDecimal("60"), 2, RoundingMode.HALF_UP);
+        BigDecimal finalFare = durationInHours.multiply(pricePerHour).setScale(2, RoundingMode.HALF_UP);
+
+        activeRecord.setFinalFare(finalFare);
+
+        // Mudar o status para COMPLETED
+        activeRecord.setStatus(ParkingStatus.COMPLETED);
+        parkingRecordRepository.save(activeRecord);
+
+        // Liberar a vaga
+        Spot spot = activeRecord.getSpot();
+        spot.setOccupied(false);
+        spotRepository.save(spot);
+
+        log.info("Saída registrada para o veículo {}. Tempo: {} minutos. Valor: R${}. Vaga {} liberada.",
+                licensePlate, durationInMinutes, finalFare, spot.getId());
     }
 
 
