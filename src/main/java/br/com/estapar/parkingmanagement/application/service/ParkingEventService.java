@@ -1,6 +1,7 @@
 package br.com.estapar.parkingmanagement.application.service;
 
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
+import br.com.estapar.parkingmanagement.domain.model.Vehicle;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.ParkingRecordRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.SpotRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.VehicleRepository;
@@ -38,8 +39,17 @@ public class ParkingEventService {
     }
 
     private void handleEntryEvent(WebhookEventDTO eventDTO) {
-        log.debug("Lógica para tratar ENTRADA para a placa: {}", eventDTO.getLicensePlate());
-        // TODO: Implementar a lógica de entrada.
+        log.debug("Tratando ENTRADA para a placa: {}", eventDTO.getLicensePlate());
+        String licensePlate = eventDTO.getLicensePlate();
+
+        // Se o veículo nunca foi registrado, então cadastra ele.
+        vehicleRepository.findById(licensePlate)
+                .orElseGet(() -> {
+                   log.info("Veículo com placa {} não encontrado. Criando novo registro.", licensePlate);
+                   return vehicleRepository.save(new Vehicle(licensePlate));
+                });
+
+        log.info("Evento de ENTRADA processado para o veículo {}.", licensePlate);
     }
 
     private void handleParkedEvent(WebhookEventDTO eventDTO) {
