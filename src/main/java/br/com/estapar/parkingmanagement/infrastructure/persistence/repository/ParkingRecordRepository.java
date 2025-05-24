@@ -55,7 +55,7 @@ public interface ParkingRecordRepository extends JpaRepository<ParkingRecord, Lo
             "WHERE pr.spot.sector = :sector " +
             "AND pr.status = :status " +
             "AND pr.exitTime >= :startDate AND pr.exitTime < :endDate")
-    BigDecimal sumFinalFareBySectorAndDataRange(
+    BigDecimal sumFinalFareBySectorAndDateRange(
             @Param("sector")Sector sector,
             @Param("status") ParkingStatus status,
             @Param("startDate")LocalDateTime startDate,

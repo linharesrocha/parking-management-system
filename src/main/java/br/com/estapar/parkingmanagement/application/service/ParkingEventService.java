@@ -6,6 +6,7 @@ import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponse
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
 import br.com.estapar.parkingmanagement.domain.model.*;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.ParkingRecordRepository;
+import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.SectorRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.SpotRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.VehicleRepository;
 import org.slf4j.Logger;
@@ -29,11 +30,14 @@ public class ParkingEventService {
     private final VehicleRepository vehicleRepository;
     private final SpotRepository spotRepository;
     private final ParkingRecordRepository parkingRecordRepository;
+    private final SectorRepository sectorRepository;
 
-    public ParkingEventService(VehicleRepository vehicleRepository, SpotRepository spotRepository, ParkingRecordRepository parkingRecordRepository) {
+    public ParkingEventService(VehicleRepository vehicleRepository, SpotRepository spotRepository,
+                               ParkingRecordRepository parkingRecordRepository, SectorRepository sectorRepository) {
         this.vehicleRepository = vehicleRepository;
         this.spotRepository = spotRepository;
         this.parkingRecordRepository = parkingRecordRepository;
+        this.sectorRepository = sectorRepository;
     }
 
     @Transactional
@@ -254,9 +258,36 @@ public class ParkingEventService {
     public RevenueResponseDTO getRevenueForSectorAndDate(String sectorName, LocalDate date) {
         log.debug("Calculando faturamento para o setor {} na data {}", sectorName, date);
 
-        // TODO: Implementar a lógica
+        // Busca o Setor pelo nome
+        Optional<Sector> sectorOpt = sectorRepository.findByName(sectorName);
 
-        return new RevenueResponseDTO(BigDecimal.ZERO, "BRL", LocalDateTime.now());
+        // Verificação
+        if(sectorOpt.isEmpty()) {
+            log.warn("Setor com nome '{}' não encontrado ao calcular faturamento. Retornando R$ 0.00.", sectorName);
+            return new RevenueResponseDTO(BigDecimal.ZERO, "BRL", LocalDateTime.now());
+        }
+
+        Sector sector = sectorOpt.get();
+
+        // Definindo o intervalo de tempo de consulta
+        LocalDateTime startDate = date.atStartOfDay();
+        LocalDateTime endDate = date.plusDays(1).atStartOfDay();
+
+        // Chama o repositório que faz a soma no banco de dados.
+        BigDecimal totalRevenue = parkingRecordRepository.sumFinalFareBySectorAndDateRange(
+                sector,
+                ParkingStatus.COMPLETED,
+                startDate,
+                endDate
+        );
+
+        if(totalRevenue == null) {
+            totalRevenue = BigDecimal.ZERO;
+        }
+
+        log.info("Faturamento calculado para o setor {} na data {}: R$ {}", sectorName, date, totalRevenue);
+
+        return new RevenueResponseDTO(totalRevenue, "BRL", LocalDateTime.now());
     }
 
     private BigDecimal calculateDynamicPrice(Sector sector) {

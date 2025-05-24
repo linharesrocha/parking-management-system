@@ -1,11 +1,13 @@
 package br.com.estapar.parkingmanagement.application.service;
 
 import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
+import br.com.estapar.parkingmanagement.application.dto.query.RevenueResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.EventType;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
 import br.com.estapar.parkingmanagement.domain.model.*;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.ParkingRecordRepository;
+import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.SectorRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.SpotRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.VehicleRepository;
 import org.junit.jupiter.api.Test;
@@ -16,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
@@ -31,6 +34,9 @@ public class ParkingEventServiceTest {
 
     @Mock
     private SpotRepository spotRepository;
+
+    @Mock
+    private SectorRepository sectorRepository;
 
     @Mock
     private ParkingRecordRepository parkingRecordRepository;
@@ -375,5 +381,76 @@ public class ParkingEventServiceTest {
         assertNull(dto.getTimeParked());
     }
 
+    @Test
+    void getRevenueForSectorAndDate_quandoSetorNaoEncontrado_deveRetornarFaturamentoZero() {
+        // Arrange
+        String nomeSetorInexistente = "SETOR_QUE_NAO_EXISTE";
+        LocalDate dataConsulta = LocalDate.of(2025, 1, 1);
 
+        when(sectorRepository.findByName(nomeSetorInexistente)).thenReturn(Optional.empty());
+
+        // Act
+        RevenueResponseDTO resultado = parkingEventService.getRevenueForSectorAndDate(nomeSetorInexistente, dataConsulta);
+
+        // Assert
+        assertNotNull(resultado);
+        assertEquals(0, BigDecimal.ZERO.compareTo(resultado.getAmount()), "O faturamento deveria ser zero para setor inexistente.");
+        assertEquals("BRL", resultado.getCurrency());
+        assertNotNull(resultado.getTimestamp());
+
+        verify(parkingRecordRepository, never()).sumFinalFareBySectorAndDateRange(any(), any(), any(), any());
+    }
+
+    @Test
+    void getRevenueForSectorAndDate_quandoSetorEncontradoMasSemRegistros_deveRetornarFaturamentoZero() {
+        // Arrange
+        String nomeSetor = "A";
+        LocalDate dataConsulta = LocalDate.of(2025, 1, 1);
+        Sector setorExistente = new Sector();
+        setorExistente.setName(nomeSetor);
+
+        LocalDateTime inicioDoDia = dataConsulta.atStartOfDay();
+        LocalDateTime fimDoDia = dataConsulta.plusDays(1).atStartOfDay();
+
+        when(sectorRepository.findByName(nomeSetor)).thenReturn(Optional.of(setorExistente));
+        when(parkingRecordRepository.sumFinalFareBySectorAndDateRange(
+                setorExistente, ParkingStatus.COMPLETED, inicioDoDia, fimDoDia))
+                .thenReturn(null);
+
+        // Act
+        RevenueResponseDTO resultado = parkingEventService.getRevenueForSectorAndDate(nomeSetor, dataConsulta);
+
+        // Assert
+        assertNotNull(resultado);
+        assertEquals(0, BigDecimal.ZERO.compareTo(resultado.getAmount()), "O faturamento deveria ser zero se não há registros.");
+        assertEquals("BRL", resultado.getCurrency());
+        assertNotNull(resultado.getTimestamp());
+    }
+
+    @Test
+    void getRevenueForSectorAndDate_quandoSetorEncontradoComRegistros_deveRetornarFaturamentoCorreto() {
+        // Arrange
+        String nomeSetor = "B";
+        LocalDate dataConsulta = LocalDate.of(2025, 1, 15);
+        Sector setorExistente = new Sector();
+        setorExistente.setName(nomeSetor);
+
+        LocalDateTime inicioDoDia = dataConsulta.atStartOfDay();
+        LocalDateTime fimDoDia = dataConsulta.plusDays(1).atStartOfDay();
+        BigDecimal faturamentoEsperado = new BigDecimal("250.75");
+
+        when(sectorRepository.findByName(nomeSetor)).thenReturn(Optional.of(setorExistente));
+        when(parkingRecordRepository.sumFinalFareBySectorAndDateRange(
+                setorExistente, ParkingStatus.COMPLETED, inicioDoDia, fimDoDia))
+                .thenReturn(faturamentoEsperado);
+
+        // Act
+        RevenueResponseDTO resultado = parkingEventService.getRevenueForSectorAndDate(nomeSetor, dataConsulta);
+
+        // Assert
+        assertNotNull(resultado);
+        assertEquals(0, faturamentoEsperado.compareTo(resultado.getAmount()), "O faturamento calculado está incorreto.");
+        assertEquals("BRL", resultado.getCurrency());
+        assertNotNull(resultado.getTimestamp());
+    }
 }
