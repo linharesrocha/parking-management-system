@@ -1,5 +1,6 @@
 package br.com.estapar.parkingmanagement.application.service;
 
+import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
 import br.com.estapar.parkingmanagement.domain.model.*;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.ParkingRecordRepository;
@@ -15,6 +16,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Optional;
 
 @Service
 public class ParkingEventService {
@@ -143,6 +145,13 @@ public class ParkingEventService {
                 licensePlate, durationInMinutes, finalFare, spot.getId());
     }
 
+    public Optional<PlateStatusResponseDTO> getPlateStatus(String licensePlate) {
+        log.debug("Buscando status para a placa: {}", licensePlate);
+
+        // TODO: Implementar a lógica para buscar o ParkingRecord ativo.
+
+        return Optional.empty();
+    }
 
     private BigDecimal calculateDynamicPrice(Sector sector) {
         // Verifica quantas vagas estão ocupadas no setor
