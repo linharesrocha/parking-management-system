@@ -77,13 +77,21 @@ public class ParkingEventService {
         Vehicle vehicle = vehicleRepository.findById(eventDTO.getLicensePlate())
                 .orElseThrow(() -> new RuntimeException("Veículo não encontrado"));
 
+        Sector sector = spot.getSector();
+
+        // Verifica se o setor tem capacidade
+        long occupiedSpots = spotRepository.countBySectorAndOccupied(sector, true);
+        if(occupiedSpots >= sector.getMaxCapacity()) {
+            log.warn("Tentativa de estacionar no setor '{}' que já está com lotação máxima de {} vagas. Rejeitando evento PARKED para a placa {}.",
+                    sector.getName(), sector.getMaxCapacity(), eventDTO.getLicensePlate());
+            throw new IllegalStateException("Lotação máxima atingida para o setor " + sector.getName());
+        }
+
         // Verifica se a vaga já está ocupada
         if(spot.isOccupied()) {
             log.error("Tentativa de estacionar em vaga já ocupada. Vaga ID: {}", spot.getId());
             throw new IllegalStateException("Vaga já está ocupada.");
         }
-
-        Sector sector = spot.getSector();
 
         // Calcula o preço/hora dinâmico
         BigDecimal dynamicPricePerHour = calculateDynamicPrice(sector);
