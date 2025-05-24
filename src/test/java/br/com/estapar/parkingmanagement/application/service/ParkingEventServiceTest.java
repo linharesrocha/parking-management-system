@@ -154,6 +154,43 @@ public class ParkingEventServiceTest {
     }
 
     @Test
+    void processEvent_comEventoDeEstacionamentoEmSetorLotado_deveLancarExcecao() {
+        // Arrange
+        WebhookEventDTO parkedEvent = new WebhookEventDTO();
+        parkedEvent.setEventType(EventType.PARKED);
+        parkedEvent.setLicensePlate("FULL-001");
+        parkedEvent.setLat(-25.0);
+        parkedEvent.setLng(-45.0);
+
+        Sector setorLotado = new Sector();
+        setorLotado.setName("LOTADO");
+        setorLotado.setMaxCapacity(1);
+
+        Spot vagaNoSetorLotado = new Spot();
+        vagaNoSetorLotado.setId(10L);
+        vagaNoSetorLotado.setSector(setorLotado);
+        vagaNoSetorLotado.setOccupied(false);
+
+        Vehicle vehicle = new Vehicle("FULL-001");
+
+        when(spotRepository.findByLatAndLng(parkedEvent.getLat(), parkedEvent.getLng()))
+                .thenReturn(Optional.of(vagaNoSetorLotado));
+        when(vehicleRepository.findById(parkedEvent.getLicensePlate()))
+                .thenReturn(Optional.of(vehicle));
+
+        when(spotRepository.countBySectorAndOccupied(setorLotado, true)).thenReturn(1L);
+
+        // Act & Assert
+        IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
+            parkingEventService.processEvent(parkedEvent);
+        });
+
+        assertTrue(exception.getMessage().contains("Lotação máxima atingida para o setor LOTADO"));
+        verify(parkingRecordRepository, never()).save(any(ParkingRecord.class));
+        verify(spotRepository, never()).save(vagaNoSetorLotado);
+    }
+
+    @Test
     void processEvent_comEventoDeSaida_deveFinalizarRegistroECalcularTarifa() {
         // Arrange
         String plate = "ABC-1234";
