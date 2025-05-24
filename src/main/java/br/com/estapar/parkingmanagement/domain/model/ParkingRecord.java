@@ -35,6 +35,9 @@ public class ParkingRecord {
     @Column(nullable = false)
     private ParkingStatus status;
 
+    @Column(name = "price_per_hour", nullable = false)
+    private BigDecimal pricePerHour;
+
     @Column(name = "final_fare")
     private BigDecimal finalFare;
 }
