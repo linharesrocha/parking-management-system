@@ -1,6 +1,7 @@
 package br.com.estapar.parkingmanagement.application.service;
 
 import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
+import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.EventType;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
 import br.com.estapar.parkingmanagement.domain.model.*;
@@ -262,6 +263,116 @@ public class ParkingEventServiceTest {
 
         // Assert
         assertTrue(resultOpt.isEmpty(), "O Optional retornado deveria estar vazio.");
+    }
+
+    @Test
+    void getSpotStatus_quandoVagaNaoEncontrada_deveRetornarOptionalVazio() {
+        // Arrange
+        Double lat = -10.0;
+        Double lng = -20.0;
+
+        when(spotRepository.findByLatAndLng(lat, lng)).thenReturn(Optional.empty());
+
+        // Act
+        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
+
+        // Assert
+        assertTrue(resultOpt.isEmpty(), "Deveria retornar um Optional vazio se a vaga não existe.");
+    }
+
+    @Test
+    void getSpotStatus_quandoVagaEncontradaELivre_deveRetornarDTOCorreto() {
+        // Arrange
+        Double lat = -10.0;
+        Double lng = -20.0;
+        Spot vagaLivre = new Spot();
+        vagaLivre.setId(1L);
+        vagaLivre.setLat(lat);
+        vagaLivre.setLng(lng);
+        vagaLivre.setOccupied(false);
+
+        when(spotRepository.findByLatAndLng(lat, lng)).thenReturn(Optional.of(vagaLivre));
+
+        // Act
+        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
+
+        // Assert
+        assertTrue(resultOpt.isPresent());
+        SpotStatusResponseDTO dto = resultOpt.get();
+        assertFalse(dto.isOccupied(), "O DTO deveria indicar que a vaga não está ocupada.");
+        assertNull(dto.getLicensePlate(), "Placa deveria ser nula para vaga livre.");
+        assertEquals(0, BigDecimal.ZERO.compareTo(dto.getPriceUntilNow()), "Preço deveria ser zero para vaga livre.");
+        assertNull(dto.getEntryTime(), "Tempo de entrada deveria ser nulo para vaga livre.");
+        assertNull(dto.getTimeParked(), "Tempo estacionado deveria ser nulo para vaga livre.");
+    }
+
+    @Test
+    void getSpotStatus_quandoVagaOcupadaComRegistroAtivo_deveRetornarDTOCompleto() {
+        // Arrange
+        Double lat = -10.0;
+        Double lng = -20.0;
+        LocalDateTime entryTime = LocalDateTime.now().minusHours(2);
+
+        Vehicle vehicle = new Vehicle("XYZ-1234");
+        Sector sector = new Sector();
+        Spot vagaOcupada = new Spot();
+        vagaOcupada.setId(1L);
+        vagaOcupada.setLat(lat);
+        vagaOcupada.setLng(lng);
+        vagaOcupada.setOccupied(true);
+        vagaOcupada.setSector(sector);
+
+        ParkingRecord registroAtivo = new ParkingRecord();
+        registroAtivo.setVehicle(vehicle);
+        registroAtivo.setSpot(vagaOcupada);
+        registroAtivo.setEntryTime(entryTime);
+        registroAtivo.setStatus(ParkingStatus.ACTIVE);
+        registroAtivo.setPricePerHour(new BigDecimal("10.00"));
+
+        when(spotRepository.findByLatAndLng(lat, lng)).thenReturn(Optional.of(vagaOcupada));
+        when(parkingRecordRepository.findBySpotAndStatus(vagaOcupada, ParkingStatus.ACTIVE))
+                .thenReturn(Optional.of(registroAtivo));
+
+        // Act
+        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
+
+        // Assert
+        assertTrue(resultOpt.isPresent());
+        SpotStatusResponseDTO dto = resultOpt.get();
+        assertTrue(dto.isOccupied());
+        assertEquals("XYZ-1234", dto.getLicensePlate());
+        assertEquals(0, new BigDecimal("20.00").compareTo(dto.getPriceUntilNow()));
+        assertEquals(entryTime.format(DateTimeFormatter.ISO_DATE_TIME), dto.getEntryTime());
+        assertNotNull(dto.getTimeParked());
+    }
+
+    @Test
+    void getSpotStatus_quandoVagaOcupadaSemRegistroAtivo_deveRetornarOcupadaComMsgErro() {
+        // Arrange
+        Double lat = -10.0;
+        Double lng = -20.0;
+
+        Spot vagaOcupada = new Spot();
+        vagaOcupada.setId(1L);
+        vagaOcupada.setLat(lat);
+        vagaOcupada.setLng(lng);
+        vagaOcupada.setOccupied(true);
+
+        when(spotRepository.findByLatAndLng(lat, lng)).thenReturn(Optional.of(vagaOcupada));
+        when(parkingRecordRepository.findBySpotAndStatus(vagaOcupada, ParkingStatus.ACTIVE))
+                .thenReturn(Optional.empty());
+
+        // Act
+        Optional<SpotStatusResponseDTO> resultOpt = parkingEventService.getSpotStatus(lat, lng);
+
+        // Assert
+        assertTrue(resultOpt.isPresent());
+        SpotStatusResponseDTO dto = resultOpt.get();
+        assertTrue(dto.isOccupied(), "A vaga ainda deve ser reportada como ocupada.");
+        assertEquals("ERRO_INTERNO_VAGA_SEM_REGISTRO_ATIVO", dto.getLicensePlate(), "Deveria indicar um erro na placa.");
+        assertNull(dto.getPriceUntilNow(), "Preço deveria ser nulo ou não presente no DTO em caso de erro interno.");
+        assertNull(dto.getEntryTime());
+        assertNull(dto.getTimeParked());
     }
 
 

@@ -196,10 +196,57 @@ public class ParkingEventService {
     public Optional<SpotStatusResponseDTO> getSpotStatus(Double lat, Double lng) {
         log.debug("Buscando status para a vaga em lat: {}, lng: {}", lat, lng);
 
-        // TODO: Implementar a lógica
+        // Tenta encontrar a Vaga (Spot) pelas coordenadas.
+        Optional<Spot> spotOpt = spotRepository.findByLatAndLng(lat, lng);
 
-        return Optional.empty() ;
+        // Verificação
+        if (spotOpt.isEmpty()) {
+            log.warn("Nenhuma vaga encontrada para as coordenadas lat: {}, lng: {}", lat, lng);
+            return Optional.empty();
+        }
 
+        Spot spot = spotOpt.get();
+        SpotStatusResponseDTO responseDTO = new SpotStatusResponseDTO();
+
+        responseDTO.setOccupied(spot.isOccupied());
+
+        // 3. Se a vaga estiver OCUPADA, encontra os detalhes do veículo e da estadia.
+        if (spot.isOccupied()) {
+            // Busca o registro de estacionamento ATIVO para ESTA vaga específica.
+            Optional<ParkingRecord> activeRecordOpt = parkingRecordRepository
+                    .findBySpotAndStatus(spot, ParkingStatus.ACTIVE);
+
+            if (activeRecordOpt.isPresent()) {
+                ParkingRecord activeRecord = activeRecordOpt.get();
+                Vehicle vehicle = activeRecord.getVehicle();
+
+                LocalDateTime entryTime = activeRecord.getEntryTime();
+                LocalDateTime currentTime = LocalDateTime.now();
+                Duration duration = Duration.between(entryTime, currentTime);
+
+                BigDecimal pricePerHour = activeRecord.getPricePerHour();
+                BigDecimal durationInHours = new BigDecimal(duration.toMinutes())
+                        .divide(new BigDecimal("60"), 2, RoundingMode.HALF_UP);
+                BigDecimal priceUntilNow = durationInHours.multiply(pricePerHour)
+                        .setScale(2, RoundingMode.HALF_UP);
+
+                responseDTO.setLicensePlate(vehicle.getLicensePlate());
+                responseDTO.setPriceUntilNow(priceUntilNow);
+                responseDTO.setEntryTime(entryTime.format(DateTimeFormatter.ISO_DATE_TIME));
+                responseDTO.setTimeParked(duration.toString()); // Formato ISO "PTnHnMnS"
+            } else {
+                log.error("INCONSISTÊNCIA DE DADOS: Vaga ID {} está marcada como ocupada, mas não foi encontrado ParkingRecord ativo.", spot.getId());
+                responseDTO.setLicensePlate("ERRO_INTERNO_VAGA_SEM_REGISTRO_ATIVO");
+            }
+        } else {
+            // Se a vaga não está ocupada, os campos de veículo, preço e tempo permanecem nulos.
+            responseDTO.setLicensePlate(null);
+            responseDTO.setPriceUntilNow(BigDecimal.ZERO);
+            responseDTO.setEntryTime(null);
+            responseDTO.setTimeParked(null);
+        }
+
+        return Optional.of(responseDTO);
     }
 
     private BigDecimal calculateDynamicPrice(Sector sector) {
