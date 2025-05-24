@@ -46,12 +46,8 @@ public class ParkingQueryController {
     })
     public ResponseEntity<PlateStatusResponseDTO> getPlateStatus(@Valid @RequestBody PlateStatusRequestDTO requestDTO) {
         log.info("Recebida requisição para /plate-status: {}", requestDTO);
-
-        Optional<PlateStatusResponseDTO> responseOpt = parkingEventService.getPlateStatus(requestDTO.getLicensePlate());
-
-        return responseOpt
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        PlateStatusResponseDTO responseDTO = parkingEventService.getPlateStatus(requestDTO.getLicensePlate());
+        return ResponseEntity.ok(responseDTO);
     }
 
     @PostMapping("/spot-status")
@@ -69,13 +65,9 @@ public class ParkingQueryController {
                             schema = @Schema(implementation = ApiErrorResponseDTO.class)) })
     })
     public ResponseEntity<SpotStatusResponseDTO> getSpotStatus(@Valid @RequestBody SpotStatusRequestDTO requestDTO) {
-        log.info("Recebida requisição para /spot-status: lat={}, lng={]", requestDTO.getLat(), requestDTO.getLng());
-
-        Optional<SpotStatusResponseDTO> responseOpt = parkingEventService.getSpotStatus(requestDTO.getLat(), requestDTO.getLng());
-
-        return responseOpt
-                .map(ResponseEntity::ok)
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        log.info("Recebida requisição para /spot-status: lat={}, lng={}", requestDTO.getLat(), requestDTO.getLng());
+        SpotStatusResponseDTO responseDTO = parkingEventService.getSpotStatus(requestDTO.getLat(), requestDTO.getLng());
+        return ResponseEntity.ok(responseDTO);
     }
 
     @GetMapping("/revenue")
@@ -92,11 +84,8 @@ public class ParkingQueryController {
     public ResponseEntity<RevenueResponseDTO> getRevenue(
             @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @RequestParam("sector") String sectorName) {
-
         log.info("Recebida requisição para /revenue: date={}, sector={}", date, sectorName);
-
         RevenueResponseDTO responseDTO = parkingEventService.getRevenueForSectorAndDate(sectorName, date);
-
         return ResponseEntity.ok(responseDTO);
     }
 }

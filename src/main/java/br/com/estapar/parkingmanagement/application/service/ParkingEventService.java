@@ -4,6 +4,7 @@ import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusRespons
 import br.com.estapar.parkingmanagement.application.dto.query.RevenueResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
+import br.com.estapar.parkingmanagement.domain.exception.ResourceNotFoundException;
 import br.com.estapar.parkingmanagement.domain.model.*;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.ParkingRecordRepository;
 import br.com.estapar.parkingmanagement.infrastructure.persistence.repository.SectorRepository;
@@ -72,10 +73,10 @@ public class ParkingEventService {
 
         // Encontra a vaga e o veículo. Se não encontrar, lança uma exceção.
         Spot spot = spotRepository.findByLatAndLng(eventDTO.getLat(), eventDTO.getLng())
-                .orElseThrow(() -> new RuntimeException("Vaga não encontrada"));
+                .orElseThrow(() -> new ResourceNotFoundException("Vaga não encontrada para as coordenadas fornecidas."));
 
         Vehicle vehicle = vehicleRepository.findById(eventDTO.getLicensePlate())
-                .orElseThrow(() -> new RuntimeException("Veículo não encontrado"));
+                .orElseThrow(() -> new ResourceNotFoundException("Veículo não encontrado para a placa fornecida."));
 
         Sector sector = spot.getSector();
 
@@ -121,10 +122,7 @@ public class ParkingEventService {
         // Encontrar o ParkingRecord ativo para este veículo
         ParkingRecord activeRecord = parkingRecordRepository
                 .findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE)
-                .orElseThrow(() -> {
-                   log.error("Nenhum registro de estacionamento ativo encontrado para a placa: {}", licensePlate);
-                   return new IllegalStateException("Nenhum registro de estacionamento ativo encontrado para a placa: " + licensePlate);
-                });
+                .orElseThrow(() -> new ResourceNotFoundException("Nenhum registro de estacionamento ativo encontrado para a placa: " + licensePlate));
 
         // Definir hora da saída
         LocalDateTime exitTime = LocalDateTime.parse(eventDTO.getExitTime(), DateTimeFormatter.ISO_DATE_TIME);
@@ -160,21 +158,14 @@ public class ParkingEventService {
                 licensePlate, durationInMinutes, finalFare, spot.getId());
     }
 
-    public Optional<PlateStatusResponseDTO> getPlateStatus(String licensePlate) {
+    public PlateStatusResponseDTO getPlateStatus(String licensePlate) {
         log.debug("Buscando status para a placa: {}", licensePlate);
 
-        // Busca o registro de estacionamento ATIVO para a placa fornecida
-        Optional<ParkingRecord> activeRecordOpt = parkingRecordRepository
-                .findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE);
-
-        // Validação
-        if(activeRecordOpt.isEmpty()) {
-            log.info("Nenhum registro de estacionamento ativo encontrado para a placa: {}", licensePlate);
-            return Optional.empty();
-        }
+        ParkingRecord activeRecord = parkingRecordRepository
+                .findByVehicleLicensePlateAndStatus(licensePlate, ParkingStatus.ACTIVE)
+                .orElseThrow(() -> new ResourceNotFoundException("Nenhum registro de estacionamento ativo encontrado para a placa: " + licensePlate));
 
         // Extrair dados
-        ParkingRecord activeRecord = activeRecordOpt.get();
         Spot spot = activeRecord.getSpot();
         Vehicle vehicle = activeRecord.getVehicle();
 
@@ -204,27 +195,19 @@ public class ParkingEventService {
         );
 
         log.info("Status encontrado para a placa {}: {}", licensePlate, responseDTO);
-        return Optional.of(responseDTO);
+        return responseDTO;
     }
 
-    public Optional<SpotStatusResponseDTO> getSpotStatus(Double lat, Double lng) {
+    public SpotStatusResponseDTO getSpotStatus(Double lat, Double lng) {
         log.debug("Buscando status para a vaga em lat: {}, lng: {}", lat, lng);
 
-        // Tenta encontrar a Vaga (Spot) pelas coordenadas.
-        Optional<Spot> spotOpt = spotRepository.findByLatAndLng(lat, lng);
+        Spot spot = spotRepository.findByLatAndLng(lat, lng)
+                .orElseThrow(() -> new ResourceNotFoundException("Nenhuma vaga encontrada para as coordenadas lat: " + lat + ", lng: " + lng));
 
-        // Verificação
-        if (spotOpt.isEmpty()) {
-            log.warn("Nenhuma vaga encontrada para as coordenadas lat: {}, lng: {}", lat, lng);
-            return Optional.empty();
-        }
-
-        Spot spot = spotOpt.get();
         SpotStatusResponseDTO responseDTO = new SpotStatusResponseDTO();
-
         responseDTO.setOccupied(spot.isOccupied());
 
-        // 3. Se a vaga estiver OCUPADA, encontra os detalhes do veículo e da estadia.
+        // Se a vaga estiver OCUPADA, encontra os detalhes do veículo e da estadia.
         if (spot.isOccupied()) {
             // Busca o registro de estacionamento ATIVO para ESTA vaga específica.
             Optional<ParkingRecord> activeRecordOpt = parkingRecordRepository
@@ -260,22 +243,14 @@ public class ParkingEventService {
             responseDTO.setTimeParked(null);
         }
 
-        return Optional.of(responseDTO);
+        return responseDTO;
     }
 
     public RevenueResponseDTO getRevenueForSectorAndDate(String sectorName, LocalDate date) {
         log.debug("Calculando faturamento para o setor {} na data {}", sectorName, date);
 
-        // Busca o Setor pelo nome
-        Optional<Sector> sectorOpt = sectorRepository.findByName(sectorName);
-
-        // Verificação
-        if(sectorOpt.isEmpty()) {
-            log.warn("Setor com nome '{}' não encontrado ao calcular faturamento. Retornando R$ 0.00.", sectorName);
-            return new RevenueResponseDTO(BigDecimal.ZERO, "BRL", LocalDateTime.now());
-        }
-
-        Sector sector = sectorOpt.get();
+        Sector sector = sectorRepository.findByName(sectorName)
+                .orElseThrow(() -> new ResourceNotFoundException("Setor com nome '" + sectorName + "' não encontrado."));
 
         // Definindo o intervalo de tempo de consulta
         LocalDateTime startDate = date.atStartOfDay();
