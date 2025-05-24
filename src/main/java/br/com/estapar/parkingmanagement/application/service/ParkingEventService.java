@@ -1,6 +1,7 @@
 package br.com.estapar.parkingmanagement.application.service;
 
 import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
+import br.com.estapar.parkingmanagement.application.dto.query.RevenueResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
 import br.com.estapar.parkingmanagement.application.dto.webhook.WebhookEventDTO;
 import br.com.estapar.parkingmanagement.domain.model.*;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Optional;
@@ -247,6 +249,14 @@ public class ParkingEventService {
         }
 
         return Optional.of(responseDTO);
+    }
+
+    public RevenueResponseDTO getRevenueForSectorAndDate(String sectorName, LocalDate date) {
+        log.debug("Calculando faturamento para o setor {} na data {}", sectorName, date);
+
+        // TODO: Implementar a lógica
+
+        return new RevenueResponseDTO(BigDecimal.ZERO, "BRL", LocalDateTime.now());
     }
 
     private BigDecimal calculateDynamicPrice(Sector sector) {

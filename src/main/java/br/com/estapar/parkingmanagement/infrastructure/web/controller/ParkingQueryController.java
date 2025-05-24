@@ -1,18 +1,14 @@
 package br.com.estapar.parkingmanagement.infrastructure.web.controller;
 
-import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusRequestDTO;
-import br.com.estapar.parkingmanagement.application.dto.query.PlateStatusResponseDTO;
-import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusRequestDTO;
-import br.com.estapar.parkingmanagement.application.dto.query.SpotStatusResponseDTO;
+import br.com.estapar.parkingmanagement.application.dto.query.*;
 import br.com.estapar.parkingmanagement.application.service.ParkingEventService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.Optional;
 
 @Slf4j
@@ -48,4 +44,15 @@ public class ParkingQueryController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/revenue")
+    public ResponseEntity<RevenueResponseDTO> getRevenue(
+            @RequestParam("date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam("sector") String sectorName) {
+
+        log.info("Recebida requisição para /revenue: date={}, sector={}", date, sectorName);
+
+        RevenueResponseDTO responseDTO = parkingEventService.getRevenueForSectorAndDate(sectorName, date);
+
+        return ResponseEntity.ok(responseDTO);
+    }
 }
