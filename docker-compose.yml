@@ -3,7 +3,7 @@ version: '3.8'
 services:
   postgres-db:
     image: postgres:15-alpine
-    container_name: estapar-postgres
+    container_name: estapar-postgres-compose
     restart: always
     ports:
       - "5432:5432"
@@ -13,6 +13,25 @@ services:
       - POSTGRES_DB=parking_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+
+  parking-management-app:
+    build: .
+    container_name: estapar-parking-app-compose
+    restart: always
+    ports:
+      - "3003:3003"
+    depends_on:
+      - postgres-db
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres-db:5432/parking_db
+      - SIMULATOR_API_URL=http://host.docker.internal:3000
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=create
+
+  garage-simulator:
+    image: cfontes0estapar/garage-sim:1.0.0
+    container_name: estapar-garage-simulator-compose
+    restart: always
+    network_mode: "host"
 
 volumes:
   postgres_data: {}
