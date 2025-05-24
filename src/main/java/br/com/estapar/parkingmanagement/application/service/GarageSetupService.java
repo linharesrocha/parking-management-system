@@ -40,40 +40,34 @@ public class GarageSetupService {
     @PostConstruct // Executa este método apenas uma vez quando a aplicação inicia.
     @Transactional
     public void initializeGarage() {
-        // Garante que o BD esteja vazio para não duplicar
-        if(sectorRepository.count() > 0) {
-            log.warn("Garagem já inicializada. Pulando setup.");
+        log.info("Chamando o endpoint /garage do simulador para iniciar a simulação...");
+        GarageConfigDTO config = garageSimulatorClient.fetchGarageConfig();
+
+        // Só popula o banco se ele estiver vazio
+        if (sectorRepository.count() > 0) {
+            log.info("Banco de dados da garagem já inicializado. Pulando a etapa de persistência de dados.");
             return;
         }
 
-        log.info("Iniciando setup da garagem...");
-        GarageConfigDTO configDTO = garageSimulatorClient.fetchGarageConfig();
+        log.info("Iniciando persistência da configuração da garagem no banco de dados...");
 
-        // Cria um mapa de Vagas DTO por nome de setor para facilitar a busca
-        Map<String, List<SpotDTO>> spotsBySector = configDTO.getSpots().stream()
+        Map<String, List<SpotDTO>> spotsBySector = config.getSpots().stream()
                 .collect(Collectors.groupingBy(SpotDTO::getSectorName));
 
-        // Itera sobre os Setores DTO
-        configDTO.getSectors().forEach(sectorDto -> {
-            // 1. Converte o Setor DTO para entidade
+        config.getSectors().forEach(sectorDto -> {
             Sector sectorEntity = toSectorEntity(sectorDto);
-
-            // 2. Encontra as vagas para este setor e as converte para entidades
             List<SpotDTO> sectorSpotsDto = spotsBySector.get(sectorDto.getName());
-            if(sectorSpotsDto != null) {
+            if (sectorSpotsDto != null) {
                 sectorSpotsDto.forEach(spotDto -> {
                     Spot spotEntity = toSpotEntity(spotDto, sectorEntity);
-                    // 3. Adiciona a vaga na lista do setor
                     sectorEntity.getSpots().add(spotEntity);
                 });
             }
-
-            // 4. Salva o SETOR. CascadeType.ALL irá salvar todas as vagas junto
             sectorRepository.save(sectorEntity);
         });
 
-        log.info("Setup da garagem concluído com sucesso! {} setores e {} vagas criadas.",
-                configDTO.getSectors().size(), configDTO.getSpots().size());
+        log.info("Persistência da configuração da garagem concluída com sucesso! {} setores e {} vagas criadas.",
+                config.getSectors().size(), config.getSpots().size());
     }
 
     private Sector toSectorEntity(SectorDTO dto) {
