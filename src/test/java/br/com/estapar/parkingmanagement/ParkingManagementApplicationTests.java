@@ -1,4 +1,4 @@
-package br.com.estapar.parkingxmanagement;
+package br.com.estapar.parkingmanagement;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
